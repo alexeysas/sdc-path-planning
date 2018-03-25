@@ -9,6 +9,7 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
 
+
 using namespace std;
 
 // for convenience
@@ -200,6 +201,14 @@ int main() {
   	map_waypoints_dy.push_back(d_y);
   }
 
+
+  // state
+
+  string current_state;
+
+
+
+
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -239,12 +248,90 @@ int main() {
 
           	json msgJson;
 
+						// to do code here
+
+
           	vector<double> next_x_vals;
           	vector<double> next_y_vals;
 
 
           	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
-          	msgJson["next_x"] = next_x_vals;
+          	
+						double dist_inc = 0.6;
+						for(int i = 0; i < 50; i++)
+						{
+									double new_s = car_s + dist_inc*i;
+									double new_d = car_d;
+									vector<double> xy = getXY(new_s, new_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+									next_x_vals.push_back(xy[0]);
+									next_y_vals.push_back(xy[1]);
+						}
+
+						//double dist_inc = 0.1;
+						//for(int i = 0; i < 50; i++)
+						//{
+						//			next_x_vals.push_back(car_x+(dist_inc*i)*cos(deg2rad(car_yaw)));
+						//			next_y_vals.push_back(car_y+(dist_inc*i)*sin(deg2rad(car_yaw)));
+						//}
+						
+						//	double pos_x;
+						//	double pos_y;
+						//	double angle;
+						//	int path_size = previous_path_x.size();
+
+						//	for(int i = 0; i < path_size; i++)
+						//	{
+						//			next_x_vals.push_back(previous_path_x[i]);
+						//			next_y_vals.push_back(previous_path_y[i]);
+						//	}
+
+						//	if(path_size == 0)
+						//	{
+						//			pos_x = car_x;
+						//			pos_y = car_y;
+						//			angle = deg2rad(car_yaw);
+						//	}
+						//	else
+						//	{
+						//			pos_x = previous_path_x[path_size-1];
+						//			pos_y = previous_path_y[path_size-1];
+
+						//			double pos_x2 = previous_path_x[path_size-2];
+						//			double pos_y2 = previous_path_y[path_size-2];
+						//			angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
+						//	}
+
+						//	double dist_inc = 0.5;
+						//	for(int i = 0; i < 50-path_size; i++)
+						//	{    
+						//			next_x_vals.push_back(pos_x+(dist_inc)*cos(angle+(i+1)*(pi()/100)));
+						//			next_y_vals.push_back(pos_y+(dist_inc)*sin(angle+(i+1)*(pi()/100)));
+						//			pos_x += (dist_inc)*cos(angle+(i+1)*(pi()/100));
+						//			pos_y += (dist_inc)*sin(angle+(i+1)*(pi()/100));
+						//	}
+
+
+          msgJson["next_x"] = next_x_vals;
+          msgJson["next_y"] = next_y_vals;
+
+
+
+
+
+
+
+
+
+
+
+						
+						//
+						//
+						//
+						//
+						
+						msgJson["next_x"] = next_x_vals;
           	msgJson["next_y"] = next_y_vals;
 
           	auto msg = "42[\"control\","+ msgJson.dump()+"]";
@@ -293,4 +380,44 @@ int main() {
     return -1;
   }
   h.run();
+}
+
+
+void transition_function(string current_state)
+{
+	//def transition_function(predictions, current_fsm_state, current_pose, cost_functions, weights):
+	//		# only consider states which can be reached from current FSM state.
+	//		possible_successor_states = successor_states(current_fsm_state)
+
+	//			# keep track of the total cost of each state.
+	//		costs = []
+	//		for state in possible_successor_states:
+	//				# generate a rough idea of what trajectory we would
+	//				# follow IF we chose this state.
+	//				trajectory_for_state = generate_trajectory(state, current_pose, predictions)
+	//
+	//				# calculate the "cost" associated with that trajectory.
+	//				cost_for_state = 0
+	//				for i in range(len(cost_functions)) :
+	//						# apply each cost function to the generated trajectory
+	//						cost_function = cost_functions[i]
+	//						cost_for_cost_function = cost_function(trajectory_for_state, predictions)
+	//
+	//						# multiply the cost by the associated weight
+	//						weight = weights[i]
+	//						cost_for_state += weight * cost_for_cost_function
+	//				costs.append({'state' : state, 'cost' : cost_for_state})
+	//
+	//		# Find the minimum cost state.
+	//		best_next_state = None
+	//		min_cost = 9999999
+	//		for i in range(len(possible_successor_states)):
+	//				state = possible_successor_states[i]
+	//				cost  = costs[i]
+	//				if cost < min_cost:
+	//						min_cost = cost
+	//						best_next_state = state 
+
+    return best_next_state
+
 }
