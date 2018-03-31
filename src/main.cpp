@@ -7,9 +7,12 @@
 #include <vector>
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
+#include "Eigen-3.3/Eigen/LU"
+
 #include "json.hpp"
 
 
+using namespace Eigen;
 using namespace std;
 
 // for convenience
@@ -39,6 +42,7 @@ double distance(double x1, double y1, double x2, double y2)
 {
 	return sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1));
 }
+
 int ClosestWaypoint(double x, double y, const vector<double> &maps_x, const vector<double> &maps_y)
 {
 
@@ -164,6 +168,80 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
 
 }
 
+double mhp_to_mps(double mhp)
+{
+	return mhp / 2.236936;
+}
+
+double mps_to_mhp(double mps)
+{
+	return mps * 2.236936;
+}
+
+vector<double> JMT(vector< double> start, vector <double> end, double T)
+{
+    /*
+    Calculate the Jerk Minimizing Trajectory that connects the initial state
+    to the final state in time T.
+
+    INPUTS
+
+    start - the vehicles start location given as a length three array
+        corresponding to initial values of [s, s_dot, s_double_dot]
+
+    end   - the desired end state for vehicle. Like "start" this is a
+        length three array.
+
+    T     - The duration, in seconds, over which this maneuver should occur.
+
+    OUTPUT 
+    an array of length 6, each value corresponding to a coefficent in the polynomial 
+    s(t) = a_0 + a_1 * t + a_2 * t**2 + a_3 * t**3 + a_4 * t**4 + a_5 * t**5
+
+    EXAMPLE
+
+    > JMT( [0, 10, 0], [10, 10, 0], 1)
+    [0.0, 10.0, 0.0, 0.0, 0.0, 0.0]
+    */
+    
+    MatrixXd A = MatrixXd(3, 3);
+	A << T*T*T, T*T*T*T, T*T*T*T*T,
+			    3*T*T, 4*T*T*T,5*T*T*T*T,
+			    6*T, 12*T*T, 20*T*T*T;
+		
+	MatrixXd B = MatrixXd(3,1);	    
+	B << end[0]-(start[0]+start[1]*T+.5*start[2]*T*T),
+			    end[1]-(start[1]+start[2]*T),
+			    end[2]-start[2];
+			    
+	MatrixXd Ai = A.inverse();
+	
+	MatrixXd C = Ai*B;
+	
+	vector <double> result = {start[0], start[1], .5*start[2]};
+	for(int i = 0; i < C.size(); i++)
+	{
+	    result.push_back(C.data()[i]);
+	}
+	
+    return result;
+    
+}
+
+vector<double> calc_poly(vector< double> coeffs, double t)
+{
+	double s = coeffs[0] + coeffs[1] * t + coeffs[2] * t * t +
+			coeffs[3] * t * t * t + coeffs[4] * t * t * t * t + coeffs[5] * t * t * t * t * t;
+
+	double s_d = coeffs[1] + 2 * coeffs[2] * t +
+			3 * coeffs[3] * t * t  +  4 * coeffs[4] *  t * t * t + 5 * coeffs[5] * t * t * t * t;
+
+	double s_d_d = 2 * coeffs[2]  + 3 * 2 * coeffs[3] * t  +  4 * 3 * coeffs[4]  * t * t + 5 * 4 * coeffs[5] * t * t * t;
+
+	return { s, s_d, s_d_d };
+}
+
+
 int main() {
   uWS::Hub h;
 
@@ -205,11 +283,11 @@ int main() {
   // state
 
   string current_state;
+  int car_lane = 1;
 
 
 
-
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&car_lane, &map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -254,19 +332,256 @@ int main() {
           	vector<double> next_x_vals;
           	vector<double> next_y_vals;
 
+			// set the desired target speed
+			double max_speed = mhp_to_mps(49.0);
 
+
+			int line_number = 1;
+
+
+			double car_mps = mhp_to_mps(car_speed);
+
+			double delta_t = 1.5;
+
+			//if (car_mps < 5)
+			//{
+			//	delta_t = 2.0;
+			//}
+			//else
+			//{
+			//	delta_t = car_mps / 25.0;
+			//}
+
+			//double meters_to_maneur = 100.0;
+
+			//double expected_average_speed =
+
+
+
+			double target_speed = car_mps + 9.2 * delta_t;
+
+			if (target_speed > max_speed) 
+			{
+				target_speed = max_speed;
+			}
+
+			double angle = deg2rad(car_yaw);
+
+			double current_a = 0;
+			double prev_size = previous_path_x.size();
+
+			if (previous_path_x.size() >= 2)
+			{
+				double x_1 = previous_path_x[prev_size - 1];
+				double y_1 = previous_path_y[prev_size - 1];
+				
+				double x_2 = previous_path_x[prev_size - 2];
+				double y_2 = previous_path_y[prev_size - 2];
+
+
+				double x_n1 = previous_path_x[0];
+				double y_n1 = previous_path_y[0];
+				
+				double x_n2 = previous_path_x[1];
+				double y_n2 = previous_path_y[1];
+
+
+				//cout << "car: " << car_x << "   " << car_y << endl;
+				//cout << "prev1: " << x_1 << "   " << y_1 << endl;
+				//cout << "prev2: " << x_2 << "   " << y_2 << endl;
+				//cout << "next1: " << x_n1 << "   " << y_n1 << endl;
+				//cout << "next2: " << x_n2 << "   " << y_n2 << endl;
+
+				double ax = x_n2 - 2 * x_n1 + car_x;
+				double ay = y_n2 - 2 * y_n1 + car_y;
+				
+				current_a = sqrt(ax * ax + ay * ay);
+				cout << "a: " << current_a << endl;
+
+			}
+
+
+			if (true)
+			{
+				 int path_size = previous_path_x.size();
+				 double pos_x;
+          		 double pos_y;
+         		 double angle;
+			 	 double speed_x;
+				 double speed_y;
+
+				double ax;
+				double ay;
+				
+				
+				//if (path_size > 30)
+				//{
+				//	path_size = 30;
+				//}
+
+
+				for(int i = 0; i < path_size; i++)
+				{
+					next_x_vals.push_back(previous_path_x[i]);
+					next_y_vals.push_back(previous_path_y[i]);
+				}
+
+				if(path_size == 0)
+				{
+					pos_x = car_x;
+					pos_y = car_y;
+					angle = deg2rad(car_yaw);
+					speed_x = car_mps * cos(angle);
+					speed_y = car_mps * sin(angle);
+					ax = 0;
+					ay = 0;
+				}
+				else
+				{
+					pos_x = previous_path_x[path_size-1];
+					pos_y = previous_path_y[path_size-1];
+
+					double pos_x2 = previous_path_x[path_size-2];
+					double pos_y2 = previous_path_y[path_size-2];
+					angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
+
+			     	double pos_x3 = previous_path_x[path_size-3];
+					double pos_y3 = previous_path_y[path_size-3];
+
+					ax = (pos_x3 - 2 * pos_x2 + pos_x) / 0.02 / 0.02;
+					ay = (pos_y3 - 2 * pos_y2 + pos_y) / 0.02 / 0.02;
+
+					speed_x = (pos_x - pos_x2) / 0.02;
+					speed_y = (pos_y - pos_y2) / 0.02;
+		
+				}
+
+				vector<double> frenet = getFrenet(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y);
+				
+				double current_s = frenet[0];
+				double current_d = frenet[1];
+				
+				double target_s = current_s + 30;
+				double target_d = 2 + 4 * car_lane;
+				
+
+				//double speed_x = car_mps * cos(angle);
+				//double speed_y = car_mps * sin(angle);
+
+				double target_speed_x = target_speed * cos(angle);
+				double target_speed_y = target_speed * sin(angle);
+				 
+				cout << "target speed x: " << target_speed_x << "target speed y: " << target_speed_y << endl;
+				cout << "current speed x: " << speed_x << "current speed y: " << speed_y << endl;
+				
+
+
+				vector<double> car_xy = { pos_x, pos_y };
+				vector<double> target_xy = getXY(target_s, target_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+				vector<double> coefs_x = JMT({car_xy[0], speed_x, ax}, {target_xy[0], target_speed_x, 0}, delta_t);
+				vector<double> coefs_y = JMT({car_xy[1], speed_y, ay}, {target_xy[1], target_speed_y, 0}, delta_t);
+				
+
+				for(int i = 0; i < 50-path_size; i++)
+				{
+					vector<double> x_ = calc_poly(coefs_x, 0.02 * (i + 1));
+					vector<double> y_ = calc_poly(coefs_y, 0.02 * (i + 1));
+
+					cout << "point speed x: " << x_[1] << "point speed y: " << y_[1] << endl;
+					
+					//cout << "S: " << new_s << "  speed: " << s_s[1] << endl;
+					//cout << "curr: " << xy[0] << " " << xy[1] << endl;
+				
+					next_x_vals.push_back(x_[0]);
+					next_y_vals.push_back(y_[0]);
+				}
+
+
+				// state
+				double state_x = 0;
+				double state_x_d = 0;
+				double state_x_dd = 0;
+				
+				double state_y = 0;
+				double state_y_d = 0;
+				double state_y_dd = 0;
+				
+
+				double state_x_f = (car_mps  + target_speed) / 2.0  * delta_t;
+				double state_x_d_f = target_speed;
+				double state_y_dd_f = 0;
+				
+				double state_d_f = 0;
+				double state_d_d_f = 0;
+				double state_d_dd_f = 0;
+				
+
+				
+			
+				}
+
+			else
+			{
+
+
+
+
+				// state
+				double state_s = 0;
+				double state_s_d = car_mps;
+				double state_s_dd = current_a;
+				
+				double state_d = 0;
+				double state_d_d = 0;
+				double state_d_dd = 0;
+				
+
+				double state_s_f = (car_mps  + target_speed) / 2.0  * delta_t;
+				double state_s_d_f = target_speed;
+				double state_s_dd_f = 0;
+				
+				double state_d_f = 0;
+				double state_d_d_f = 0;
+				double state_d_dd_f = 0;
+				
+
+				vector<double> coefs_s = JMT({state_s, state_s_d, state_s_dd}, {state_s_f, state_s_d_f, state_s_dd_f}, delta_t);
+				vector<double> coefs_d = JMT({state_d, state_d_d, state_d_dd}, {state_d_f, state_d_d_f, state_d_dd_f}, delta_t);
+
+
+				cout << "Speeds:" <<  car_mps << "           " << target_speed << endl;
+				cout << "S:" <<  car_s << "           " << car_s + state_s_f << endl;
+
+				double dist_inc = 1.0 * target_speed / 50.0;
+
+				for(int i = 0; i < 500; i++)
+				{
+					vector<double> s_s = calc_poly(coefs_s, 0.02 * (i + 1));
+					double new_s = car_s + s_s[0];
+					double new_d = car_d;
+					vector<double> xy = getXY(new_s, new_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+					//cout << "S: " << new_s << "  speed: " << s_s[1] << endl;
+					//cout << "curr: " << xy[0] << " " << xy[1] << endl;
+				
+					next_x_vals.push_back(xy[0]);
+					next_y_vals.push_back(xy[1]);
+				}
+
+			}
           	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
           	
-						double dist_inc = 0.6;
-						for(int i = 0; i < 50; i++)
-						{
-									double new_s = car_s + dist_inc*i;
-									double new_d = car_d;
-									vector<double> xy = getXY(new_s, new_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+						//double dist_inc = 1.0 * target_speed / 50.0;
+						//for(int i = 0; i < 50; i++)
+						//{
+					//				double new_s = car_s + dist_inc*i;
+				//					double new_d = car_d;
+			//						vector<double> xy = getXY(new_s, new_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
-									next_x_vals.push_back(xy[0]);
-									next_y_vals.push_back(xy[1]);
-						}
+//									next_x_vals.push_back(xy[0]);
+//									next_y_vals.push_back(xy[1]);
+//						}
 
 						//double dist_inc = 0.1;
 						//for(int i = 0; i < 50; i++)
@@ -418,6 +733,6 @@ void transition_function(string current_state)
 	//						min_cost = cost
 	//						best_next_state = state 
 
-    return best_next_state
+   // return best_next_state
 
 }

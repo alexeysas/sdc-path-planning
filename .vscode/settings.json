@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "qr": "cpp",
+        "functional": "cpp",
+        "array": "cpp",
+        "hash_map": "cpp",
+        "initializer_list": "cpp",
+        "alignedvector3": "cpp",
+        "ostream": "cpp",
+        "iostream": "cpp"
+    }
+}
