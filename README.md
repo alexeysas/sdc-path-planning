@@ -36,11 +36,11 @@ Same way is used to generate all trajectories for possible target state - the on
 
 1. Get previous planned points from telementry and use last two of them - this will ensure that resulting path is smooth and cconnected.
 
-2. Generate 3 points alo
+2. Generate 3 points along desired road lane far away - to ensure smoth lane change or lane driving.  
 
 ```cpp
-	 double target_d = 2.0 + 4.0 * car_lane;
-	 double s_scale = 50;
+	double target_d = 2.0 + 4.0 * car_lane;
+	double s_scale = 50;
 
 	double car_s = current_state.s;
 
@@ -53,6 +53,80 @@ Same way is used to generate all trajectories for possible target state - the on
 
 		points_x.push_back(xy[0]);
 		points_y.push_back(xy[1]);
+	}
+
+'''
+
+3. Convert points to vehicle coordinates - this just makes math easier as car is driving along X axis.
+
+```cpp
+	ConvertToVehicle(pos_x, pos_y, points_x, points_y, angle);
+...
+
+4. Using spline library create spline which passes through points from the previous path and currently generated points on the desired lane.
+	
+```cpp
+	spline s;
+	s.set_points(points_x, points_y);
+...
+
+5. Next we need to identify points along the spline to make sure we are trying to reach  target lane speed and preventing huge jerk
+
+```cpp
+	// build spline along the points
+	spline s;
+	s.set_points(points_x, points_y);
+
+	// determine assumed maneuver end coordinates ( expeicily actual for lane change)
+	double target_x = s_scale;
+	double target_y = s(target_x);
+	
+	// deetermine distance to travel - it is aproximate distance
+	double dist = sqrt(target_x * target_x + target_y * target_y);
+
+	double x_start = 0;
+
+	vector<double> points_x_v;
+	vector<double> points_y_v;
+	
+	// for each next point we need to setup speed which is closer to the target speed but do ot cause jerk
+	double next_speed = target_speed;
+
+	// check if we need to brake to reach target speed
+	bool isBrake = (target_speed - speed_end_path) < 0;
+
+	// need to generate 50 points, each next point 0.02 sec away from previous
+	for (int i = 0; i < 50; i++)
+	{
+		// check if acceleration exceed maximum alowed - if so adjust target speed to the value
+		// which is possible to reach with maximum allowed acceleration
+		double acc = fabs(target_speed - speed_end_path) / 0.02;
+
+		if (acc > MAX_A)
+		{
+			if (isBrake)
+			{
+				next_speed = speed_end_path - MAX_A * 0.02;
+			}
+			else
+			{
+				next_speed = speed_end_path + MAX_A * 0.02;
+			}
+
+			speed_end_path = next_speed;
+		}
+
+		// determine step of the point - so we can reach next planend speed
+		double N = dist / (.02 * next_speed);
+
+		// calculate next desired trajectory point
+		double x = x_start + target_x / N;
+		x_start = x;
+		double y = s(x);
+
+		// add planned points to the trajectory
+		points_x_v.push_back(x);
+		points_y_v.push_back(y);
 	}
 
 '''
