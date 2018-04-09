@@ -421,7 +421,43 @@ double line_change_cost(const CarState &current_state, const CarState &target_st
 {
 	if (current_state.target_lane != target_state.target_lane)
 	{
-		return 0.009;
+		double total_cost = 0.009; //constant penalty to prevent changing lines in the empty road.
+		
+		// dinamic penalty to prevent changing line to the lne wehre car is closer, even if it is faster -
+		// AI cars have weried acceleration behaviour 
+
+		double min_source = 9999999999999;
+		double min_target = 9999999999999;
+
+
+		for (int j = 0; j < sensor_fusion.forward_cars.size(); j++)
+		{
+			Car car = sensor_fusion.forward_cars[j];
+			double car_s = car.planned_s;
+			double car_d = car.d;
+
+			if (car.lane == current_state.target_lane)
+			{
+				if (min_source > car_s)
+				{
+					min_source = car_s;
+				}
+			}
+			else if (car.lane == target_state.target_lane)
+			{
+				if (min_target > car_s)
+				{
+					min_target = car_s;
+				}
+			}
+		}
+
+		if (min_target < min_source)
+		{
+			total_cost += 0.1;
+		}
+
+		return total_cost;
 	}
 	else
 	{
@@ -488,7 +524,7 @@ double safety_cost(const CarState &current_state, const CarState &target_state, 
 
 			//cout << "Distance to car: " << dist << endl; 
 
-			if (dist < distance_threshold * 2 && (car.lane == target_state.target_lane || car.lane == current_state.target_lane))
+			if (dist < distance_threshold * 2 && (car.lane == target_state.target_lane))
 			{
 				return 1000.0 * 1.0 / dist;
 			} 
