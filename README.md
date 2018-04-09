@@ -3,21 +3,21 @@ Self-Driving Car Engineer Nanodegree Program
   
 
 ## Goal
-In this project your goal is to safely navigate around a virtual highway with other traffic that is driving +-10 MPH of the 50 MPH speed limit. You will be provided the car's localization and sensor fusion data, there is also a sparse map list of waypoints around the highway. The car should try to go as close as possible to the 50 MPH speed limit, which means passing slower traffic when possible, note that other cars will try to change lanes too. The car should avoid hitting other cars at all cost as well as driving inside of the marked road lanes at all times, unless going from one lane to another. The car should be able to make one complete loop around the 6946m highway. Since the car is trying to go 50 MPH, it should take a little over 5 minutes to complete 1 loop. Also the car should not experience total acceleration over 10 m/s^2 and jerk that is greater than 10 m/s^3.
+In this project your goal is to safely navigate around a virtual highway with other traffic that is driving +-10 MPH of the 50 MPH speed limit. You will be provided the car's localization and sensor fusion data, there is also a sparse map list of waypoints around the highway. The car should try to go as close as possible to the 50 MPH speed limit, which means passing slower traffic when possible, note that other cars will try to change lanes too. The car should avoid hitting other cars at all cost as well as driving inside of the marked road lanes at all times, unless going from one lane to another. The car should be able to make one complete loop around the 6946m highway. Since the car is trying to go 50 MPH, it should take a little over 5 minutes to complete 1 loop. Also, the car should not experience total acceleration over 10 m/s^2 and jerk that is greater than 10 m/s^3.
 
 
 ## Solution Summary
 
-To achive the goal followng steps need to be perfomed for the car:
+To achieve the goal following steps need to be performed for the car:
 
-1. Get car telemetry data grom the simulator
-2. From the tememetry determine car state:
+1. Get car telemetry data from the simulator
+2. From the telemetry determine car state:
    * Lane
    * Coordinates
    * Speed
    * Planned path points from the previous planned path
    
-3. From telemetry get sensor fusion data - to form preadictions - so we can incroporate safety cost to the state machine.
+3. From telemetry get sensor fusion data - to form predictions - so we can incorporate safety cost to the state machine.
 
 4. Run state machine which: 
    * Determine possible next states
@@ -28,15 +28,14 @@ To achive the goal followng steps need to be perfomed for the car:
 
 ## Trajectory generation details
 
-Although in the lecture Jerk Minimising Trajectory approach was used - it was extrimly hard to adopt it to this project. (main1.cpp contains the best attempt of now to generate trajectory using this approach). The main issue is that trajectory generated for three parameters coordinates, speed, accelerations - which produce 
-
-So finnaly decided to go with spline approach from the walkthrough video. The main idea of the approach is to generate spline ensuring  smooth trajectory for the coordinates visited and adjust speed and acceleration to the values required to drive accross this trajectory smoothly. 
-
+Although in the lecture Jerk Minimizing Trajectory approach was used - it was hard to adopt it to this project. (main1.cpp contains the best attempt of now to generate trajectory using this approach). The main issue is that trajectory generated for three parameters coordinates, speed, accelerations - which produce funny behavior for the car. Also having issues to connect previous points to the new model with this approach.   The idea how to solve this it to generate a big set of possible trajectories and select best from them which suites to the previous points. 
+However, finally decided to go with spline approach from the walkthrough video. The main idea of the approach is to generate spline ensuring smooth trajectory for the coordinates visited and adjust speed and acceleration to the values required to drive across this trajectory smoothly without jerk. 
 Same way is used to generate all trajectories for possible target state - the only difference is target lane number provided to the trajectory generator.
 
-1. Get previous planned points from telementry and use last two of them - this will ensure that resulting path is smooth and cconnected.
+Here is detailed description:
+1. Get previous planned points from telemetry and use last two of them - this will ensure that resulting path is smooth and connected.
 
-2. Generate 3 points along desired road lane far away - to ensure smoth lane change or lane driving.  
+2. Generate 3 points along desired road lane far away - to ensure smooth lane change or lane driving.  
 
 ```cpp
 	double target_d = 2.0 + 4.0 * car_lane;
@@ -70,14 +69,14 @@ Same way is used to generate all trajectories for possible target state - the on
 	s.set_points(points_x, points_y);
 ```
 
-5. Next we need to identify points along the spline to make sure we are trying to reach  target lane speed and preventing huge jerk
+5. Next we need to identify points along the spline to make sure we are trying to reach target lane speed and preventing huge jerk
 
 ```cpp
 	// build spline along the points
 	spline s;
 	s.set_points(points_x, points_y);
 
-	// determine assumed maneuver end coordinates ( expeicily actual for lane change)
+	// determine assumed maneuver end coordinates (explicitly actual for lane change)
 	double target_x = s_scale;
 	double target_y = s(target_x);
 	
@@ -89,7 +88,7 @@ Same way is used to generate all trajectories for possible target state - the on
 	vector<double> points_x_v;
 	vector<double> points_y_v;
 	
-	// for each next point we need to setup speed which is closer to the target speed but do ot cause jerk
+	// for each next point we need to setup speed which is closer to the target speed but do not cause jerk
 	double next_speed = target_speed;
 
 	// check if we need to brake to reach target speed
@@ -131,7 +130,7 @@ Same way is used to generate all trajectories for possible target state - the on
 
 ```
 
-6. Convert back to world coordinates so points are ready to be analzyed by cost functions.
+6. Convert back to world coordinates so points are ready to be analyzed by cost functions.
 
 
 ```cpp
@@ -139,13 +138,13 @@ Same way is used to generate all trajectories for possible target state - the on
 	s.set_points(points_x, points_y);
 ```
 
-
-Please note that such trajectories generated for all possible state transitions. Although we generate 50 points and all of the used for trajectory cost analysys - not all are sent to simulator.  We just  use couple of new points so together with previous points we have 50 points total.
-
+Please note that such trajectories generated for all possible state transitions. Although we generate 50 points and all used for trajectory cost analysis - not all are sent to the simulator.  We just use couple of new points so together with previous points we have 50 points total.
 
 ## Next steps
 
-Future possible enchancements Following echncacements can be done
+Although car drives smoothly along highway there are couple of issue enchantments to work this. 
+
+
 
 
 
