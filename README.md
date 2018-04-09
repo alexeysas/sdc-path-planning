@@ -1,140 +1,151 @@
 # CarND-Path-Planning-Project
 Self-Driving Car Engineer Nanodegree Program
-   
-### Simulator.
-You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases/tag/T3_v1.2).
+  
 
-### Goals
+## Goal
 In this project your goal is to safely navigate around a virtual highway with other traffic that is driving +-10 MPH of the 50 MPH speed limit. You will be provided the car's localization and sensor fusion data, there is also a sparse map list of waypoints around the highway. The car should try to go as close as possible to the 50 MPH speed limit, which means passing slower traffic when possible, note that other cars will try to change lanes too. The car should avoid hitting other cars at all cost as well as driving inside of the marked road lanes at all times, unless going from one lane to another. The car should be able to make one complete loop around the 6946m highway. Since the car is trying to go 50 MPH, it should take a little over 5 minutes to complete 1 loop. Also the car should not experience total acceleration over 10 m/s^2 and jerk that is greater than 10 m/s^3.
 
-#### The map of the highway is in data/highway_map.txt
-Each waypoint in the list contains  [x,y,s,dx,dy] values. x and y are the waypoint's map coordinate position, the s value is the distance along the road to get to that waypoint in meters, the dx and dy values define the unit normal vector pointing outward of the highway loop.
 
-The highway's waypoints loop around so the frenet s value, distance along the road, goes from 0 to 6945.554.
+## Solution Summary
 
-## Basic Build Instructions
+To achive the goal followng steps need to be perfomed for the car:
 
-1. Clone this repo.
-2. Make a build directory: `mkdir build && cd build`
-3. Compile: `cmake .. && make`
-4. Run it: `./path_planning`.
+1. Get car telemetry data grom the simulator
+2. From the tememetry determine car state:
+   * Lane
+   * Coordinates
+   * Speed
+   * Planned path points from the previous planned path
+   
+3. From telemetry get sensor fusion data - to form preadictions - so we can incroporate safety cost to the state machine.
 
-Here is the data provided from the Simulator to the C++ Program
+4. Run state machine which: 
+   * Determine possible next states
+   * For each next state generate possible trajectory
+   * Select trajectory with smallest cost.
 
-#### Main car's localization Data (No Noise)
+5. After trajectory is determined send it to the simulator for execution
 
-["x"] The car's x position in map coordinates
+## Trajectory generation details
 
-["y"] The car's y position in map coordinates
+Although in the lecture Jerk Minimising Trajectory approach was used - it was extrimly hard to adopt it to this project. (main1.cpp contains the best attempt of now to generate trajectory using this approach). The main issue is that trajectory generated for three parameters coordinates, speed, accelerations - which produce 
 
-["s"] The car's s position in frenet coordinates
+So finnaly decided to go with spline approach from the walkthrough video. The main idea of the approach is to generate spline ensuring  smooth trajectory for the coordinates visited and adjust speed and acceleration to the values required to drive accross this trajectory smoothly. 
 
-["d"] The car's d position in frenet coordinates
+Same way is used to generate all trajectories for possible target state - the only difference is target lane number provided to the trajectory generator.
 
-["yaw"] The car's yaw angle in the map
+1. Get previous planned points from telementry and use last two of them - this will ensure that resulting path is smooth and cconnected.
 
-["speed"] The car's speed in MPH
+2. Generate 3 points along desired road lane far away - to ensure smoth lane change or lane driving.  
 
-#### Previous path data given to the Planner
+```cpp
+	double target_d = 2.0 + 4.0 * car_lane;
+	double s_scale = 50;
 
-//Note: Return the previous list but with processed points removed, can be a nice tool to show how far along
-the path has processed since last time. 
+	double car_s = current_state.s;
 
-["previous_path_x"] The previous list of x points previously given to the simulator
+	// prepare poitns for hte spline
+	for (int i = 1; i < 4; i++)
+	{
+		double new_s = car_s + s_scale * i;
+		double new_d = target_d;
+		vector<double> xy = getXY(new_s, new_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
-["previous_path_y"] The previous list of y points previously given to the simulator
+		points_x.push_back(xy[0]);
+		points_y.push_back(xy[1]);
+	}
 
-#### Previous path's end s and d values 
+```
 
-["end_path_s"] The previous list's last point's frenet s value
+3. Convert points to vehicle coordinates - this just makes math easier as car is driving along X axis.
 
-["end_path_d"] The previous list's last point's frenet d value
+```cpp
+	ConvertToVehicle(pos_x, pos_y, points_x, points_y, angle);
+```
 
-#### Sensor Fusion Data, a list of all other car's attributes on the same side of the road. (No Noise)
+4. Using spline library create spline which passes through points from the previous path and currently generated points on the desired lane.
+	
+```cpp
+	spline s;
+	s.set_points(points_x, points_y);
+```
 
-["sensor_fusion"] A 2d vector of cars and then that car's [car's unique ID, car's x position in map coordinates, car's y position in map coordinates, car's x velocity in m/s, car's y velocity in m/s, car's s position in frenet coordinates, car's d position in frenet coordinates. 
+5. Next we need to identify points along the spline to make sure we are trying to reach  target lane speed and preventing huge jerk
 
-## Details
+```cpp
+	// build spline along the points
+	spline s;
+	s.set_points(points_x, points_y);
 
-1. The car uses a perfect controller and will visit every (x,y) point it recieves in the list every .02 seconds. The units for the (x,y) points are in meters and the spacing of the points determines the speed of the car. The vector going from a point to the next point in the list dictates the angle of the car. Acceleration both in the tangential and normal directions is measured along with the jerk, the rate of change of total Acceleration. The (x,y) point paths that the planner recieves should not have a total acceleration that goes over 10 m/s^2, also the jerk should not go over 50 m/s^3. (NOTE: As this is BETA, these requirements might change. Also currently jerk is over a .02 second interval, it would probably be better to average total acceleration over 1 second and measure jerk from that.
+	// determine assumed maneuver end coordinates ( expeicily actual for lane change)
+	double target_x = s_scale;
+	double target_y = s(target_x);
+	
+	// deetermine distance to travel - it is aproximate distance
+	double dist = sqrt(target_x * target_x + target_y * target_y);
 
-2. There will be some latency between the simulator running and the path planner returning a path, with optimized code usually its not very long maybe just 1-3 time steps. During this delay the simulator will continue using points that it was last given, because of this its a good idea to store the last points you have used so you can have a smooth transition. previous_path_x, and previous_path_y can be helpful for this transition since they show the last points given to the simulator controller with the processed points already removed. You would either return a path that extends this previous path or make sure to create a new path that has a smooth transition with this last path.
+	double x_start = 0;
 
-## Tips
+	vector<double> points_x_v;
+	vector<double> points_y_v;
+	
+	// for each next point we need to setup speed which is closer to the target speed but do ot cause jerk
+	double next_speed = target_speed;
 
-A really helpful resource for doing this project and creating smooth trajectories was using http://kluge.in-chemnitz.de/opensource/spline/, the spline function is in a single hearder file is really easy to use.
+	// check if we need to brake to reach target speed
+	bool isBrake = (target_speed - speed_end_path) < 0;
 
----
+	// need to generate 50 points, each next point 0.02 sec away from previous
+	for (int i = 0; i < 50; i++)
+	{
+		// check if acceleration exceed maximum alowed - if so adjust target speed to the value
+		// which is possible to reach with maximum allowed acceleration
+		double acc = fabs(target_speed - speed_end_path) / 0.02;
 
-## Dependencies
+		if (acc > MAX_A)
+		{
+			if (isBrake)
+			{
+				next_speed = speed_end_path - MAX_A * 0.02;
+			}
+			else
+			{
+				next_speed = speed_end_path + MAX_A * 0.02;
+			}
 
-* cmake >= 3.5
-  * All OSes: [click here for installation instructions](https://cmake.org/install/)
-* make >= 4.1
-  * Linux: make is installed by default on most Linux distros
-  * Mac: [install Xcode command line tools to get make](https://developer.apple.com/xcode/features/)
-  * Windows: [Click here for installation instructions](http://gnuwin32.sourceforge.net/packages/make.htm)
-* gcc/g++ >= 5.4
-  * Linux: gcc / g++ is installed by default on most Linux distros
-  * Mac: same deal as make - [install Xcode command line tools]((https://developer.apple.com/xcode/features/)
-  * Windows: recommend using [MinGW](http://www.mingw.org/)
-* [uWebSockets](https://github.com/uWebSockets/uWebSockets)
-  * Run either `install-mac.sh` or `install-ubuntu.sh`.
-  * If you install from source, checkout to commit `e94b6e1`, i.e.
-    ```
-    git clone https://github.com/uWebSockets/uWebSockets 
-    cd uWebSockets
-    git checkout e94b6e1
-    ```
+			speed_end_path = next_speed;
+		}
 
-## Editor Settings
+		// determine step of the point - so we can reach next planend speed
+		double N = dist / (.02 * next_speed);
 
-We've purposefully kept editor configuration files out of this repo in order to
-keep it as simple and environment agnostic as possible. However, we recommend
-using the following settings:
+		// calculate next desired trajectory point
+		double x = x_start + target_x / N;
+		x_start = x;
+		double y = s(x);
 
-* indent using spaces
-* set tab width to 2 spaces (keeps the matrices in source code aligned)
+		// add planned points to the trajectory
+		points_x_v.push_back(x);
+		points_y_v.push_back(y);
+	}
 
-## Code Style
+```
 
-Please (do your best to) stick to [Google's C++ style guide](https://google.github.io/styleguide/cppguide.html).
-
-## Project Instructions and Rubric
-
-Note: regardless of the changes you make, your project must be buildable using
-cmake and make!
+6. Convert back to world coordinates so points are ready to be analzyed by cost functions.
 
 
-## Call for IDE Profiles Pull Requests
+```cpp
+	spline s;
+	s.set_points(points_x, points_y);
+```
 
-Help your fellow students!
 
-We decided to create Makefiles with cmake to keep this project as platform
-agnostic as possible. Similarly, we omitted IDE profiles in order to ensure
-that students don't feel pressured to use one IDE or another.
+Please note that such trajectories generated for all possible state transitions. Although we generate 50 points and all of the used for trajectory cost analysys - not all are sent to simulator.  We just  use couple of new points so together with previous points we have 50 points total.
 
-However! I'd love to help people get up and running with their IDEs of choice.
-If you've created a profile for an IDE that you think other students would
-appreciate, we'd love to have you add the requisite profile files and
-instructions to ide_profiles/. For example if you wanted to add a VS Code
-profile, you'd add:
 
-* /ide_profiles/vscode/.vscode
-* /ide_profiles/vscode/README.md
+## Next steps
 
-The README should explain what the profile does, how to take advantage of it,
-and how to install it.
+Future possible enchancements Following echncacements can be done
 
-Frankly, I've never been involved in a project with multiple IDE profiles
-before. I believe the best way to handle this would be to keep them out of the
-repo root to avoid clutter. My expectation is that most profiles will include
-instructions to copy files to a new location to get picked up by the IDE, but
-that's just a guess.
 
-One last note here: regardless of the IDE used, every submitted project must
-still be compilable with cmake and make./
-
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
 
