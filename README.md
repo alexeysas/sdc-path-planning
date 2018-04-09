@@ -55,20 +55,20 @@ Same way is used to generate all trajectories for possible target state - the on
 		points_y.push_back(xy[1]);
 	}
 
-'''
+```
 
 3. Convert points to vehicle coordinates - this just makes math easier as car is driving along X axis.
 
 ```cpp
 	ConvertToVehicle(pos_x, pos_y, points_x, points_y, angle);
-...
+```
 
 4. Using spline library create spline which passes through points from the previous path and currently generated points on the desired lane.
 	
 ```cpp
 	spline s;
 	s.set_points(points_x, points_y);
-...
+```
 
 5. Next we need to identify points along the spline to make sure we are trying to reach  target lane speed and preventing huge jerk
 
@@ -129,7 +129,19 @@ Same way is used to generate all trajectories for possible target state - the on
 		points_y_v.push_back(y);
 	}
 
-'''
+```
+
+6. Convert back to world coordinates so points are ready to be analzyed by cost functions.
+
+
+```cpp
+	spline s;
+	s.set_points(points_x, points_y);
+```
+
+
+Please note that such trajectories generated for all possible state transitions. Although we generate 50 points and all of the used for trajectory cost analysys - not all are sent to simulator.  We just  use couple of new points so together with previous points we have 50 points total.
+
 
 ## Next steps
 
