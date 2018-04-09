@@ -7,6 +7,9 @@
         "initializer_list": "cpp",
         "alignedvector3": "cpp",
         "ostream": "cpp",
-        "iostream": "cpp"
+        "iostream": "cpp",
+        "utility": "cpp",
+        "future": "cpp",
+        "system_error": "cpp"
     }
 }

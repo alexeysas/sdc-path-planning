@@ -893,4 +893,16 @@ Eigen-3.3/Eigen/LU
 /home/asas/Projects/SDC/Term3/sdc-path-planning/src/Eigen-3.3/Eigen/LU
 json.hpp
 /home/asas/Projects/SDC/Term3/sdc-path-planning/src/json.hpp
+spline.h
+/home/asas/Projects/SDC/Term3/sdc-path-planning/src/spline.h
+
+/home/asas/Projects/SDC/Term3/sdc-path-planning/src/spline.h
+cstdio
+-
+cassert
+-
+vector
+-
+algorithm
+-
 

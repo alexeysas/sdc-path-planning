@@ -171,3 +171,4 @@ CMakeFiles/path_planning.dir/src/main.cpp.o
  /home/asas/Projects/SDC/Term3/sdc-path-planning/src/Eigen-3.3/Eigen/src/plugins/MatrixCwiseUnaryOps.h
  /home/asas/Projects/SDC/Term3/sdc-path-planning/src/json.hpp
  /home/asas/Projects/SDC/Term3/sdc-path-planning/src/main.cpp
+ /home/asas/Projects/SDC/Term3/sdc-path-planning/src/spline.h
