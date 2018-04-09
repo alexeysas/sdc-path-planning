@@ -254,9 +254,8 @@ void ConvertToVehicle(double vx, double vy, vector<double> &x, vector<double> &y
 #define LCL 1
 #define RCL 2
 
-
 // constants
-#define MAX_A 8
+#define MAX_A 7
 
 // structure to define full car state required to make decisions
 struct CarState
@@ -268,12 +267,11 @@ struct CarState
 	vector<double> lane_speeds;
 
 	double s;
-	
+
 	double planned_x;
 	double planned_y;
 	double planned_angle;
 	double planned_speed;
-	
 
 	vector<double> points_x;
 	vector<double> points_y;
@@ -301,7 +299,6 @@ struct SensorFusion
 	vector<Car> back_cars;
 	vector<double> lane_speeds;
 };
-
 
 // transform sensor fusion data - c
 SensorFusion get_sensor_fusion(nlohmann::json sensor_fusion, double car_s, double car_s_planned, int path_size,
@@ -382,8 +379,8 @@ vector<int> successor_states(CarState current_state, map<int, vector<int>> trans
 	vector<int> res;
 
 	vector<int> states = transitions[current_state.state_code];
-	
-	for (int i=0; i < states.size(); i++)
+
+	for (int i = 0; i < states.size(); i++)
 	{
 		int state = states[i];
 
@@ -415,20 +412,19 @@ vector<int> successor_states(CarState current_state, map<int, vector<int>> trans
 
 // penalty fpr changing lane  - prevents unnessesary lane changing behaviour
 double line_change_cost(const CarState &current_state, const CarState &target_state, const SensorFusion &sensor_fusion,
-	const vector<double> & map_waypoints_x,
-	const vector<double> & map_waypoints_y,
-	const vector<double> & map_waypoints_s)
+						const vector<double> &map_waypoints_x,
+						const vector<double> &map_waypoints_y,
+						const vector<double> &map_waypoints_s)
 {
 	if (current_state.target_lane != target_state.target_lane)
 	{
 		double total_cost = 0.009; //constant penalty to prevent changing lines in the empty road.
-		
+
 		// dinamic penalty to prevent changing line to the lne wehre car is closer, even if it is faster -
-		// AI cars have weried acceleration behaviour 
+		// AI cars have weried acceleration behaviour
 
 		double min_source = 9999999999999;
 		double min_target = 9999999999999;
-
 
 		for (int j = 0; j < sensor_fusion.forward_cars.size(); j++)
 		{
@@ -467,9 +463,9 @@ double line_change_cost(const CarState &current_state, const CarState &target_st
 
 // penalty for selecting line with low speed
 double speed_cost(const CarState &current_state, const CarState &target_state, const SensorFusion &sensor_fusion,
-	const vector<double> & map_waypoints_x,
-	const vector<double> & map_waypoints_y,
-	const vector<double> & map_waypoints_s)
+				  const vector<double> &map_waypoints_x,
+				  const vector<double> &map_waypoints_y,
+				  const vector<double> &map_waypoints_s)
 {
 	return 1.0 / target_state.lane_speeds[target_state.target_lane];
 }
@@ -477,9 +473,9 @@ double speed_cost(const CarState &current_state, const CarState &target_state, c
 // huge penalty for unsafe driving - just check futher trajectory poitns and predict how far cars will be enar these points
 // if car to close - assign penalty
 double safety_cost(const CarState &current_state, const CarState &target_state, const SensorFusion &sensor_fusion,
-	const vector<double> & map_waypoints_x,
-	const vector<double> & map_waypoints_y,
-	const vector<double> & map_waypoints_s)
+				   const vector<double> &map_waypoints_x,
+				   const vector<double> &map_waypoints_y,
+				   const vector<double> &map_waypoints_s)
 {
 
 	double distance_threshold = 40.0;
@@ -490,44 +486,49 @@ double safety_cost(const CarState &current_state, const CarState &target_state, 
 		double x = target_state.planned_points_x[i];
 		double y = target_state.planned_points_y[i];
 
-		for (int j = 0; j < sensor_fusion.forward_cars.size(); j++)
+		if (target_state.target_lane != current_state.target_lane)
 		{
-			Car car = sensor_fusion.forward_cars[j];
-			double car_s = car.planned_s + i * 0.02 * car.speed * 0.8; // add risk that car is breaking 
-			double car_d = car.d;
 
-			vector<double> xy = getXY(car_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-			double car_x = xy[0]; 
-			double car_y = xy[1];
-
-			double dist = (car_x - x) * (car_x - x) + (car_y - y) * (car_y - y);
-
-			
-			if (dist < distance_threshold && (car.lane == target_state.target_lane || car.lane == current_state.target_lane))
+			for (int j = 0; j < sensor_fusion.forward_cars.size(); j++)
 			{
-				return 1000.0 * 1.0 / dist;
-			} 
-		}
+				Car car = sensor_fusion.forward_cars[j];
+				double car_s = car.planned_s + i * 0.02 * car.speed; // add risk that car is breaking
+				double car_d = car.d;
 
-		// calculate penalty for being close to the car in back.
-		for (int j = 0; j < sensor_fusion.back_cars.size(); j++)
-		{
-			Car car = sensor_fusion.back_cars[j];
-			double car_s = car.planned_s + i * 0.02 * car.speed * 2; // multiple 2 to add risk that car will be accelerating 
-			double car_d = car.d;
+				vector<double> xy = getXY(car_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+				double car_x = xy[0];
+				double car_y = xy[1];
 
-			vector<double> xy = getXY(car_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-			double car_x = xy[0]; 
-			double car_y = xy[1];
+				double dist = (car_x - x) * (car_x - x) + (car_y - y) * (car_y - y);
 
-			double dist = (car_x - x) * (car_x - x) + (car_y - y) * (car_y - y);
+				if (dist < distance_threshold && (car.lane == target_state.target_lane || car.lane == current_state.target_lane))
+				{
+					return 1000.0 * 1.0 / dist;
+				}
+			}
 
-			//cout << "Distance to car: " << dist << endl; 
+			// calculate penalty for being close to the car in back.
+			// only if we changing line
 
-			if (dist < distance_threshold * 2 && (car.lane == target_state.target_lane))
+			for (int j = 0; j < sensor_fusion.back_cars.size(); j++)
 			{
-				return 1000.0 * 1.0 / dist;
-			} 
+				Car car = sensor_fusion.back_cars[j];
+				double car_s = car.planned_s + i * 0.02 * car.speed * 1.5; // multiple 2 to add risk that car will be accelerating
+				double car_d = car.d;
+
+				vector<double> xy = getXY(car_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+				double car_x = xy[0];
+				double car_y = xy[1];
+
+				double dist = (car_x - x) * (car_x - x) + (car_y - y) * (car_y - y);
+
+				//cout << "Distance to car: " << dist << endl;
+
+				if (dist < distance_threshold * 1.5 && car.lane == target_state.target_lane)
+				{
+					return 1000.0 * 1.0 / dist;
+				}
+			}
 		}
 	}
 
@@ -535,25 +536,25 @@ double safety_cost(const CarState &current_state, const CarState &target_state, 
 }
 
 // generate trajectory which transfer car from current state to target state
-CarState generate_trajectory(const CarState &current_state, int state_code, 
-	vector<double> & map_waypoints_x,
-	vector<double> & map_waypoints_y,
-	vector<double> & map_waypoints_s)
+CarState generate_trajectory(const CarState &current_state, int state_code,
+							 vector<double> &map_waypoints_x,
+							 vector<double> &map_waypoints_y,
+							 vector<double> &map_waypoints_s)
 {
 	CarState res;
-	vector<double>  points_x = current_state.points_x;
-	vector<double>  points_y = current_state.points_y;
-	
+	vector<double> points_x = current_state.points_x;
+	vector<double> points_y = current_state.points_y;
+
 	// extract car position at speed the end of the previous trajectory
 	double pos_x = current_state.planned_x;
 	double pos_y = current_state.planned_y;
 	double angle = current_state.planned_angle;
-	
+
 	double speed_end_path = current_state.planned_speed;
 
 	vector<double> planned_points_x;
 	vector<double> planned_points_y;
-	
+
 	// extract source lane and target lane according to state transition
 	res.target_lane = current_state.source_lane;
 	res.source_lane = current_state.source_lane;
@@ -575,10 +576,9 @@ CarState generate_trajectory(const CarState &current_state, int state_code,
 	// get target speed of the desired lane
 	double target_speed = current_state.lane_speeds[car_lane];
 
-
 	// build spline which predict smooth trajectory along the road to the target lane.
 	double target_d = 2.0 + 4.0 * car_lane;
-	double s_scale = 60;
+	double s_scale = 50;
 
 	double car_s = current_state.s;
 
@@ -593,15 +593,14 @@ CarState generate_trajectory(const CarState &current_state, int state_code,
 		points_y.push_back(xy[1]);
 	}
 
-	// convert points to vehilce coordinates 
+	// convert points to vehilce coordinates
 	ConvertToVehicle(pos_x, pos_y, points_x, points_y, angle);
 
 	// build spline along the points
 	spline s;
 	s.set_points(points_x, points_y);
 
-
-	double target_x = 30.0;
+	double target_x = s_scale;
 	double target_y = s(target_x);
 	double dist = sqrt(target_x * target_x + target_y * target_y);
 
@@ -609,16 +608,16 @@ CarState generate_trajectory(const CarState &current_state, int state_code,
 
 	vector<double> points_x_v;
 	vector<double> points_y_v;
-	
+
 	double next_speed = target_speed;
-	
+
 	// check if we need to brake to reach target speed
 	bool isBrake = (target_speed - speed_end_path) < 0;
 
 	for (int i = 0; i < 50; i++)
 	{
-		// check if acceleration exeed maximum alowed - if so adjust target speed to the value 
-		// which is possible to reach with maximum acceleration 
+		// check if acceleration exeed maximum alowed - if so adjust target speed to the value
+		// which is possible to reach with maximum acceleration
 		double acc = fabs(target_speed - speed_end_path) / 0.02;
 
 		if (acc > MAX_A)
@@ -667,17 +666,17 @@ CarState generate_trajectory(const CarState &current_state, int state_code,
 	res.planned_y = current_state.planned_y;
 	res.s = current_state.s;
 	res.state_code = state_code;
-	
+
 	return res;
 }
 
 CarState transition_function(CarState current_state, map<int, vector<int>> transitions, SensorFusion sensor_fusion,
-	vector<double> & map_waypoints_x,
-	vector<double> & map_waypoints_y,
-	vector<double> & map_waypoints_s)
+							 vector<double> &map_waypoints_x,
+							 vector<double> &map_waypoints_y,
+							 vector<double> &map_waypoints_s)
 {
 	// this is canonical transition function. It checks all possible transition states,
-	// calculates cost functions 
+	// calculates cost functions
 	// selecat target state with smallest cast
 	//	# only consider states which can be reached from current state.
 	vector<int> possible_successor_states = successor_states(current_state, transitions);
@@ -697,9 +696,9 @@ CarState transition_function(CarState current_state, map<int, vector<int>> trans
 
 		// # generate trajectory
 		CarState target_state = generate_trajectory(current_state, state_code,
-						map_waypoints_x,
-						map_waypoints_y,
-						map_waypoints_s);
+													map_waypoints_x,
+													map_waypoints_y,
+													map_waypoints_s);
 
 		double cost_for_state = 0;
 
@@ -719,7 +718,6 @@ CarState transition_function(CarState current_state, map<int, vector<int>> trans
 		states[state_code] = target_state;
 	}
 
-
 	// select target trajectory with smallest cost
 	double min_cost = 999999999;
 	CarState min_state;
@@ -738,11 +736,10 @@ CarState transition_function(CarState current_state, map<int, vector<int>> trans
 	}
 
 	// trace desision
-	cout << "min_state:  lane - " << min_state.target_lane << "   code - " << min_state.state_code << endl;  
+	cout << "min_state:  lane - " << min_state.target_lane << "   code - " << min_state.state_code << endl;
 
 	return min_state;
 }
-
 
 int main()
 {
@@ -800,7 +797,7 @@ int main()
 	//clock_t time_start = clock();
 
 	h.onMessage([&current_state, &transitions, &map_waypoints_x, &map_waypoints_y, &map_waypoints_s, &map_waypoints_dx, &map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
-																																						uWS::OpCode opCode) {
+																																		   uWS::OpCode opCode) {
 		// "42" at the start of the message means there's a websocket message event.
 		// The 4 signifies a websocket message
 		// The 2 signifies a websocket event
@@ -843,7 +840,7 @@ int main()
 
 					//setup constants
 					double max_speed = mhp_to_mps(49.0);
-			
+
 					vector<double> next_x_vals;
 					vector<double> next_y_vals;
 
@@ -868,7 +865,7 @@ int main()
 					double end_s;
 					double end_d;
 
-					// we are going to use previous calculated points as 
+					// we are going to use previous calculated points as
 					// discussed in walkthrough - this guarantee smooth path created
 					double prev_size = previous_path_x.size();
 					double speed_end_path = car_mps;
@@ -915,7 +912,6 @@ int main()
 						points_y.push_back(pos_y);
 					}
 
-
 					// sensor fusion section
 					// prepare sensor fusion data in a way it can be used for path generation
 					// determine closest cars and lane speeds
@@ -925,8 +921,8 @@ int main()
 
 					SensorFusion sensor_fusion_data = get_sensor_fusion(sensor_fusion, car_s, car_s_planned, prev_size,
 																		max_speed, 80.0, 30.0);
-					
-					// collect all nessesary informatiion to the current car state 
+
+					// collect all nessesary informatiion to the current car state
 					// including sensor fusion data, car position and planned car position at the end ot the remaining
 					// trajectory points
 					current_state.lane_speeds = sensor_fusion_data.lane_speeds;
@@ -943,20 +939,21 @@ int main()
 					current_state.d_to_target = fabs(2 + current_state.target_lane * 4 - car_d_planned);
 
 					// destination reached to target lane - so swiching lane in state
-					if (current_state.d_to_target < 0.5) {
+					if (current_state.d_to_target < 0.5)
+					{
 						current_state.source_lane = current_state.target_lane;
 					}
 
 					// trace that current cycle is completed
 					cout << endl;
-					cout << "Next cycle: current_lane - " <<  (car_d_planned - 2.0) / 4.0 << " state - " << current_state.state_code <<  endl;
+					cout << "Next cycle: current_lane - " << (car_d_planned - 2.0) / 4.0 << " state - " << current_state.state_code << endl;
 					cout << endl;
-					
+
 					// determine target state based on the avalaible trajectories and cost functions
 					CarState target_state = transition_function(current_state, transitions, sensor_fusion_data,
-						map_waypoints_x,
-						map_waypoints_y,
-						map_waypoints_s);
+																map_waypoints_x,
+																map_waypoints_y,
+																map_waypoints_s);
 
 					// update current state and points according to the selected target state
 					current_state.state_code = target_state.state_code;
@@ -968,7 +965,6 @@ int main()
 						next_y_vals.push_back(target_state.planned_points_y[i]);
 					}
 
-				
 					msgJson["next_x"] = next_x_vals;
 					msgJson["next_y"] = next_y_vals;
 
