@@ -142,7 +142,11 @@ Please note that such trajectories generated for all possible state transitions.
 
 ## Next steps
 
-Although car drives smoothly along highway there are couple of issue enchantments to work this. 
+Although car drives smoothly along highway there are couple of issue enchantments to work with to achive better behaviour.
+
+* Sometimes car stuck in a right lane becouse central is slower and it is costly to change lane there, however left lane is free -so double lane change might be benefitial.   The idea is to make fastest lane as a goal Lane and design additional const fuction to penalize lanes far from goal lane.
+
+* Sometime there is rare issue which make car to change lane to slower lane with car just before it which is extremely hard to debug due to rarity of conditions. Although, this lane changes rarely leads to accident as car often able to adjust speed to avoid accident- the driving behavior looks strange and dangereus. So need to find efficient way to deal with this issue.
 
 
 
